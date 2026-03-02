@@ -130,6 +130,8 @@ fi
 #shellcheck disable=SC2016
 TEMPLATE=$(echo -e "${TEMPLATE}" | sed 's|\^HaSz\^|#|g' | sed '1h;2,$H;$!d;g; s|\^NowALiNiA\^|\n|g')
 
+echo -e "${TEMPLATE}" > /tmp/template
+
 if [[ -z "${PR_NUMBER}" ]]; then
   echo -e "\nSetting all arguments..."
   if [[ -n "${INPUT_TITLE}" ]]; then
@@ -137,42 +139,75 @@ if [[ -z "${PR_NUMBER}" ]]; then
   else
     TITLE=$(git log -1 --pretty=%s | head -1)
   fi
-  echo -e "${TEMPLATE}" > /tmp/template
-  ARG_LIST=("--repo" "${GITHUB_REPOSITORY}" "--base" "${TARGET_BRANCH}" "--head" "${SOURCE_BRANCH}" "--title" "${TITLE}" "--body-file" "/tmp/template")
-  if [[ -n "${INPUT_REVIEWER}" ]]; then
-    ARG_LIST+=("--reviewer" "${INPUT_REVIEWER}")
-  fi
-  if [[ -n "${INPUT_ASSIGNEE}" ]]; then
-    ARG_LIST+=("--assignee" "${INPUT_ASSIGNEE}")
-  fi
-  if [[ -n "${INPUT_LABEL}" ]]; then
-    ARG_LIST+=("--label" "${INPUT_LABEL}")
-  fi
-  if [[ -n "${INPUT_MILESTONE}" ]]; then
-    ARG_LIST+=("--milestone" "${INPUT_MILESTONE}")
-  fi
-  if [[ "${INPUT_DRAFT}" == "true" ]]; then
-    ARG_LIST+=("--draft")
-  fi
-else
-  echo -e "${TEMPLATE}" > /tmp/template
-fi
 
-if [[ -z "${PR_NUMBER}" ]]; then
-  echo -e "\nCreating pull request"
+  DRAFT_VALUE="false"
+  if [[ "${INPUT_DRAFT}" == "true" ]]; then
+    DRAFT_VALUE="true"
+  fi
+
+  echo -e "\nCreating pull request via REST API"
   echo -e "\nTemplate:"
   cat /tmp/template
-  echo -e "\nRunning: gh pr create ${ARG_LIST[*]}"
-  URL=$(gh pr create "${ARG_LIST[@]}")
-  # shellcheck disable=SC2181
-  if [[ "$?" != "0" ]]; then RET_CODE=1; fi
-  PR_NUMBER=$(gh pr view "${URL}" --json number --jq '.number' 2>/dev/null || true)
+  echo -e "\nRunning: gh api --method POST repos/${GITHUB_REPOSITORY}/pulls"
+  RESPONSE=$(gh api --method POST "repos/${GITHUB_REPOSITORY}/pulls" \
+    --field "head=${SOURCE_BRANCH}" \
+    --field "base=${TARGET_BRANCH}" \
+    --field "title=${TITLE}" \
+    --field "body=@/tmp/template" \
+    --field "draft=${DRAFT_VALUE}" 2>&1) || true
+
+  URL=$(echo "${RESPONSE}" | jq -r '.html_url // empty')
+  PR_NUMBER=$(echo "${RESPONSE}" | jq -r '.number // empty')
+
+  if [[ -z "${PR_NUMBER}" ]]; then
+    echo -e "\n[WARN] Create failed, checking if PR already exists..."
+    PR_NUMBER=$(gh pr list --repo "${GITHUB_REPOSITORY}" --base "${TARGET_BRANCH}" --head "${SOURCE_BRANCH}" --json number --jq '.[0].number' 2>/dev/null || true)
+    if [[ -n "${PR_NUMBER}" ]]; then
+      echo -e "[INFO] Found existing PR #${PR_NUMBER}, updating instead."
+      URL=$(gh api --method PATCH "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}" \
+        --field "body=@/tmp/template" --jq '.html_url') || RET_CODE=1
+    else
+      echo -e "[ERROR] Failed to create PR: ${RESPONSE}"
+      RET_CODE=1
+    fi
+  fi
+
+  if [[ -n "${PR_NUMBER}" ]]; then
+    if [[ -n "${INPUT_LABEL}" ]]; then
+      echo -e "\nAdding labels..."
+      IFS=',' read -r -a LABELS <<< "${INPUT_LABEL}"
+      for L in "${LABELS[@]}"; do
+        gh api --method POST "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/labels" \
+          --field "labels[]=${L// /}" > /dev/null 2>&1 || true
+      done
+    fi
+    if [[ -n "${INPUT_REVIEWER}" ]]; then
+      echo -e "Adding reviewers..."
+      IFS=',' read -r -a REVIEWERS <<< "${INPUT_REVIEWER}"
+      for R in "${REVIEWERS[@]}"; do
+        gh api --method POST "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/requested_reviewers" \
+          --field "reviewers[]=${R// /}" > /dev/null 2>&1 || true
+      done
+    fi
+    if [[ -n "${INPUT_ASSIGNEE}" ]]; then
+      echo -e "Adding assignees..."
+      IFS=',' read -r -a ASSIGNEES <<< "${INPUT_ASSIGNEE}"
+      for A in "${ASSIGNEES[@]}"; do
+        gh api --method POST "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/assignees" \
+          --field "assignees[]=${A// /}" > /dev/null 2>&1 || true
+      done
+    fi
+    if [[ -n "${INPUT_MILESTONE}" ]]; then
+      echo -e "Setting milestone..."
+      gh api --method PATCH "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}" \
+        --field "milestone=${INPUT_MILESTONE}" > /dev/null 2>&1 || true
+    fi
+  fi
 else
-  echo -e "\nUpdating pull request"
+  echo -e "\nUpdating pull request #${PR_NUMBER}"
   echo -e "Running: gh api --method PATCH repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}"
-  URL=$(gh api --method PATCH "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}" --field "body=@/tmp/template" --jq '.html_url')
-  # shellcheck disable=SC2181
-  if [[ "$?" != "0" ]]; then RET_CODE=1; fi
+  URL=$(gh api --method PATCH "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}" \
+    --field "body=@/tmp/template" --jq '.html_url') || RET_CODE=1
 fi
 
 # Finish
