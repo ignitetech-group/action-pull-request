@@ -24,7 +24,6 @@ RUN chmod +x /entrypoint.sh ;\
   apt-get install --no-install-recommends -y \
     git \
     gh \
-    hub \
     jq ;\
   apt-get clean ;\
   rm -rf /var/lib/apt/lists/*

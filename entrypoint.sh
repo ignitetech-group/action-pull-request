@@ -48,8 +48,6 @@ git config --global --add safe.directory /github/workspace
 git remote set-url origin "https://${GITHUB_ACTOR}:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}"
 git config --global user.name "${GITHUB_ACTOR}"
 git config --global user.email "${GITHUB_ACTOR}@users.noreply.github.com"
-# Needed for hub binary
-export GITHUB_USER="${GITHUB_ACTOR}"
 
 echo -e "\nSetting branches..."
 SOURCE_BRANCH="${INPUT_SOURCE_BRANCH:-$(git symbolic-ref --short -q HEAD)}"
@@ -96,7 +94,7 @@ GIT_DIFF=$(git diff --compact-summary --no-color "origin/${TARGET_BRANCH}...orig
 GIT_DIFF=$(echo -e "${GIT_DIFF}" | sed 's|#|^HaSz^|g' | sed ':a;N;$!ba; s/\n/^NowALiNiA^/g')
 
 echo -e "\nSetting template..."
-PR_NUMBER=$(hub pr list --base "${TARGET_BRANCH}" --head "${SOURCE_BRANCH}" --format '%I')
+PR_NUMBER=$(gh pr list --repo "${GITHUB_REPOSITORY}" --base "${TARGET_BRANCH}" --head "${SOURCE_BRANCH}" --json number --jq '.[0].number' 2>/dev/null || true)
 if [[ -z "${PR_NUMBER}" ]]; then
   if [[ -n "${INPUT_TEMPLATE}" ]]; then
     TEMPLATE=$(cat "${INPUT_TEMPLATE}")
@@ -106,7 +104,7 @@ if [[ -z "${PR_NUMBER}" ]]; then
     TEMPLATE="${GIT_LOG}"
   fi
 else
-  TEMPLATE=$(hub api --method GET "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}" | jq -r '.body')
+  TEMPLATE=$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}" --jq '.body')
 fi
 
 if [[ -n "${INPUT_OLD_STRING}" ]]; then
@@ -139,22 +137,22 @@ if [[ -z "${PR_NUMBER}" ]]; then
   else
     TITLE=$(git log -1 --pretty=%s | head -1)
   fi
-  ARG_LIST=()
-  ARG_LIST+=("-F /tmp/template")
+  echo -e "${TEMPLATE}" > /tmp/template
+  ARG_LIST=("--repo" "${GITHUB_REPOSITORY}" "--base" "${TARGET_BRANCH}" "--head" "${SOURCE_BRANCH}" "--title" "${TITLE}" "--body-file" "/tmp/template")
   if [[ -n "${INPUT_REVIEWER}" ]]; then
-    ARG_LIST+=("-r \"${INPUT_REVIEWER}\"")
+    ARG_LIST+=("--reviewer" "${INPUT_REVIEWER}")
   fi
   if [[ -n "${INPUT_ASSIGNEE}" ]]; then
-    ARG_LIST+=("-a \"${INPUT_ASSIGNEE}\"")
+    ARG_LIST+=("--assignee" "${INPUT_ASSIGNEE}")
   fi
   if [[ -n "${INPUT_LABEL}" ]]; then
-    ARG_LIST+=("-l \"${INPUT_LABEL}\"")
+    ARG_LIST+=("--label" "${INPUT_LABEL}")
   fi
   if [[ -n "${INPUT_MILESTONE}" ]]; then
-    ARG_LIST+=("-M \"${INPUT_MILESTONE}\"")
+    ARG_LIST+=("--milestone" "${INPUT_MILESTONE}")
   fi
-  if [[ "${INPUT_DRAFT}" ==  "true" ]]; then
-    ARG_LIST+=("-d")
+  if [[ "${INPUT_DRAFT}" == "true" ]]; then
+    ARG_LIST+=("--draft")
   fi
 else
   echo -e "${TEMPLATE}" > /tmp/template
@@ -162,22 +160,17 @@ fi
 
 if [[ -z "${PR_NUMBER}" ]]; then
   echo -e "\nCreating pull request"
-  echo -e "${TITLE}" > /tmp/template
-  echo -e "\n${TEMPLATE}" >> /tmp/template
   echo -e "\nTemplate:"
   cat /tmp/template
-  # shellcheck disable=SC2016,SC2124
-  COMMAND="hub pull-request -b ${TARGET_BRANCH} -h ${SOURCE_BRANCH} --no-edit ${ARG_LIST[@]}"
-  echo -e "\nRunning: ${COMMAND}"
-  URL=$(sh -c "${COMMAND}")
+  echo -e "\nRunning: gh pr create ${ARG_LIST[*]}"
+  URL=$(gh pr create "${ARG_LIST[@]}")
   # shellcheck disable=SC2181
   if [[ "$?" != "0" ]]; then RET_CODE=1; fi
-  PR_NUMBER=$(gh pr view --json number -q .number "${URL}")
+  PR_NUMBER=$(gh pr view "${URL}" --json number --jq '.number' 2>/dev/null || true)
 else
   echo -e "\nUpdating pull request"
-  COMMAND="hub api --method PATCH repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER} --field 'body=@/tmp/template'"
-  echo -e "Running: ${COMMAND}"
-  URL=$(sh -c "${COMMAND} | jq -r '.html_url'")
+  echo -e "Running: gh api --method PATCH repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}"
+  URL=$(gh api --method PATCH "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}" --field "body=@/tmp/template" --jq '.html_url')
   # shellcheck disable=SC2181
   if [[ "$?" != "0" ]]; then RET_CODE=1; fi
 fi
