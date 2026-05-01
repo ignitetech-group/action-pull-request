@@ -48,8 +48,6 @@ git config --global --add safe.directory /github/workspace
 git remote set-url origin "https://${GITHUB_ACTOR}:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}"
 git config --global user.name "${GITHUB_ACTOR}"
 git config --global user.email "${GITHUB_ACTOR}@users.noreply.github.com"
-# Needed for hub binary
-export GITHUB_USER="${GITHUB_ACTOR}"
 
 echo -e "\nSetting branches..."
 SOURCE_BRANCH="${INPUT_SOURCE_BRANCH:-$(git symbolic-ref --short -q HEAD)}"
@@ -96,7 +94,7 @@ GIT_DIFF=$(git diff --compact-summary --no-color "origin/${TARGET_BRANCH}...orig
 GIT_DIFF=$(echo -e "${GIT_DIFF}" | sed 's|#|^HaSz^|g' | sed ':a;N;$!ba; s/\n/^NowALiNiA^/g')
 
 echo -e "\nSetting template..."
-PR_NUMBER=$(hub pr list --base "${TARGET_BRANCH}" --head "${SOURCE_BRANCH}" --format '%I')
+PR_NUMBER=$(gh pr list --repo "${GITHUB_REPOSITORY}" --base "${TARGET_BRANCH}" --head "${SOURCE_BRANCH}" --json number --jq '.[0].number' 2>/dev/null || true)
 if [[ -z "${PR_NUMBER}" ]]; then
   if [[ -n "${INPUT_TEMPLATE}" ]]; then
     TEMPLATE=$(cat "${INPUT_TEMPLATE}")
@@ -106,7 +104,7 @@ if [[ -z "${PR_NUMBER}" ]]; then
     TEMPLATE="${GIT_LOG}"
   fi
 else
-  TEMPLATE=$(hub api --method GET "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}" | jq -r '.body')
+  TEMPLATE=$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}" --jq '.body')
 fi
 
 if [[ -n "${INPUT_OLD_STRING}" ]]; then
@@ -132,6 +130,8 @@ fi
 #shellcheck disable=SC2016
 TEMPLATE=$(echo -e "${TEMPLATE}" | sed 's|\^HaSz\^|#|g' | sed '1h;2,$H;$!d;g; s|\^NowALiNiA\^|\n|g')
 
+echo -e "${TEMPLATE}" > /tmp/template
+
 if [[ -z "${PR_NUMBER}" ]]; then
   echo -e "\nSetting all arguments..."
   if [[ -n "${INPUT_TITLE}" ]]; then
@@ -139,47 +139,107 @@ if [[ -z "${PR_NUMBER}" ]]; then
   else
     TITLE=$(git log -1 --pretty=%s | head -1)
   fi
-  ARG_LIST=()
-  ARG_LIST+=("-F /tmp/template")
-  if [[ -n "${INPUT_REVIEWER}" ]]; then
-    ARG_LIST+=("-r \"${INPUT_REVIEWER}\"")
-  fi
-  if [[ -n "${INPUT_ASSIGNEE}" ]]; then
-    ARG_LIST+=("-a \"${INPUT_ASSIGNEE}\"")
-  fi
-  if [[ -n "${INPUT_LABEL}" ]]; then
-    ARG_LIST+=("-l \"${INPUT_LABEL}\"")
-  fi
-  if [[ -n "${INPUT_MILESTONE}" ]]; then
-    ARG_LIST+=("-M \"${INPUT_MILESTONE}\"")
-  fi
-  if [[ "${INPUT_DRAFT}" ==  "true" ]]; then
-    ARG_LIST+=("-d")
-  fi
-else
-  echo -e "${TEMPLATE}" > /tmp/template
-fi
 
-if [[ -z "${PR_NUMBER}" ]]; then
-  echo -e "\nCreating pull request"
-  echo -e "${TITLE}" > /tmp/template
-  echo -e "\n${TEMPLATE}" >> /tmp/template
+  DRAFT_VALUE="false"
+  if [[ "${INPUT_DRAFT}" == "true" ]]; then
+    DRAFT_VALUE="true"
+  fi
+
+  echo -e "\nCreating pull request via REST API"
   echo -e "\nTemplate:"
   cat /tmp/template
-  # shellcheck disable=SC2016,SC2124
-  COMMAND="hub pull-request -b ${TARGET_BRANCH} -h ${SOURCE_BRANCH} --no-edit ${ARG_LIST[@]}"
-  echo -e "\nRunning: ${COMMAND}"
-  URL=$(sh -c "${COMMAND}")
-  # shellcheck disable=SC2181
-  if [[ "$?" != "0" ]]; then RET_CODE=1; fi
-  PR_NUMBER=$(gh pr view --json number -q .number "${URL}")
+  echo -e "\nRunning: gh api --method POST repos/${GITHUB_REPOSITORY}/pulls"
+  RESPONSE=$(gh api --method POST "repos/${GITHUB_REPOSITORY}/pulls" \
+    --field "head=${SOURCE_BRANCH}" \
+    --field "base=${TARGET_BRANCH}" \
+    --field "title=${TITLE}" \
+    --field "body=@/tmp/template" \
+    -F "draft=${DRAFT_VALUE}" 2>&1) || true
+
+  URL=$(echo "${RESPONSE}" | jq -r '.html_url // empty')
+  PR_NUMBER=$(echo "${RESPONSE}" | jq -r '.number // empty')
+
+  if [[ -z "${PR_NUMBER}" ]]; then
+    echo -e "\n[WARN] Create failed, checking if PR already exists..."
+    PR_NUMBER=$(gh pr list --repo "${GITHUB_REPOSITORY}" --base "${TARGET_BRANCH}" --head "${SOURCE_BRANCH}" --json number --jq '.[0].number' 2>/dev/null || true)
+    if [[ -n "${PR_NUMBER}" ]]; then
+      echo -e "[INFO] Found existing PR #${PR_NUMBER}, updating instead."
+      URL=$(gh api --method PATCH "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}" \
+        --field "body=@/tmp/template" --jq '.html_url') || RET_CODE=1
+    else
+      echo -e "[ERROR] Failed to create PR: ${RESPONSE}"
+      RET_CODE=1
+    fi
+  fi
+
+  if [[ -n "${PR_NUMBER}" ]]; then
+    # Trim leading/trailing whitespace only — preserves internal spaces in
+    # labels like "good first issue".
+    trim() { local v="$1"; v="${v#"${v%%[![:space:]]*}"}"; printf '%s' "${v%"${v##*[![:space:]]}"}"; }
+    # Best-effort gh api wrapper: warns on failure but does not abort the run.
+    gh_api_best_effort() {
+      local what="$1"; shift
+      local out
+      if ! out=$(gh api "$@" 2>&1); then
+        echo "[WARN] ${what} failed: ${out}" >&2
+      fi
+    }
+    if [[ -n "${INPUT_LABEL}" ]]; then
+      echo -e "\nAdding labels..."
+      IFS=',' read -r -a LABELS <<< "${INPUT_LABEL}"
+      for L in "${LABELS[@]}"; do
+        L_TRIMMED=$(trim "${L}")
+        gh_api_best_effort "add label '${L_TRIMMED}'" \
+          --method POST "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/labels" \
+          --field "labels[]=${L_TRIMMED}"
+      done
+    fi
+    if [[ -n "${INPUT_REVIEWER}" ]]; then
+      echo -e "Adding reviewers..."
+      IFS=',' read -r -a REVIEWERS <<< "${INPUT_REVIEWER}"
+      for R in "${REVIEWERS[@]}"; do
+        R_TRIMMED=$(trim "${R}")
+        gh_api_best_effort "add reviewer '${R_TRIMMED}'" \
+          --method POST "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/requested_reviewers" \
+          --field "reviewers[]=${R_TRIMMED}"
+      done
+    fi
+    if [[ -n "${INPUT_ASSIGNEE}" ]]; then
+      echo -e "Adding assignees..."
+      IFS=',' read -r -a ASSIGNEES <<< "${INPUT_ASSIGNEE}"
+      for A in "${ASSIGNEES[@]}"; do
+        A_TRIMMED=$(trim "${A}")
+        gh_api_best_effort "add assignee '${A_TRIMMED}'" \
+          --method POST "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/assignees" \
+          --field "assignees[]=${A_TRIMMED}"
+      done
+    fi
+    if [[ -n "${INPUT_MILESTONE}" ]]; then
+      echo -e "Setting milestone..."
+      # GitHub's PATCH /issues endpoint requires a numeric milestone ID.
+      # Preserve the legacy hub-style behaviour of accepting a milestone
+      # title by resolving non-numeric input to the matching milestone's ID.
+      MILESTONE_ID="${INPUT_MILESTONE}"
+      if ! [[ "${INPUT_MILESTONE}" =~ ^[0-9]+$ ]]; then
+        MILESTONE_ID=$(gh api --paginate "repos/${GITHUB_REPOSITORY}/milestones?state=all" \
+          --jq ".[] | select(.title==\"${INPUT_MILESTONE}\") | .number" 2>/dev/null | head -1)
+        if [[ -z "${MILESTONE_ID}" ]]; then
+          echo "[WARN] No milestone found with title '${INPUT_MILESTONE}'; skipping milestone assignment." >&2
+          MILESTONE_ID=""
+        fi
+      fi
+      if [[ -n "${MILESTONE_ID}" ]]; then
+        gh_api_best_effort "set milestone ${MILESTONE_ID}" \
+          --method PATCH "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}" \
+          -F "milestone=${MILESTONE_ID}"
+      fi
+    fi
+  fi
 else
-  echo -e "\nUpdating pull request"
-  COMMAND="hub api --method PATCH repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER} --field 'body=@/tmp/template'"
-  echo -e "Running: ${COMMAND}"
-  URL=$(sh -c "${COMMAND} | jq -r '.html_url'")
-  # shellcheck disable=SC2181
-  if [[ "$?" != "0" ]]; then RET_CODE=1; fi
+  echo -e "\nUpdating pull request #${PR_NUMBER}"
+  echo -e "Running: gh api --method PATCH repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}"
+  URL=$(gh api --method PATCH "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}" \
+    --field "body=@/tmp/template" --jq '.html_url') || RET_CODE=1
 fi
 
 # Finish

@@ -1,10 +1,15 @@
 # 🚀 GitHub Action for creating Pull Requests
 **GitHub Action that will create a pull request from the currently selected branch.**
 
+> [!NOTE]
+> This is the IgniteTech fork of [`devops-infra/action-pull-request`](https://github.com/devops-infra/action-pull-request). It builds the action image from the local `Dockerfile` on every consumer run (no pre-built third-party image is pulled), uses the `gh` CLI plus the GitHub REST API instead of the deprecated `hub` binary, and pins all CI third-party actions to commit SHAs.
+>
+> **Always pin to a full commit SHA**, never to a branch (`@master`) or a version tag (`@v1`, `@v1.0.2`). Branches move with every push and tags can be force-moved by maintainers, so both are mutable references that let upstream changes silently flow into your CI. A 40-character commit SHA is immutable and reproducible. Find the SHA you want at [github.com/ignitetech-group/action-pull-request/commits/master](https://github.com/ignitetech-group/action-pull-request/commits/master) and substitute it in the examples below.
 
-## 📦 Available on
-- **Docker Hub:** [devopsinfra/action-pull-request:latest](https://hub.docker.com/repository/docker/devopsinfra/action-pull-request)
-- **GitHub Packages:** [ghcr.io/devops-infra/action-pull-request:latest](https://github.com/devops-infra/action-pull-request/pkgs/container/action-pull-request)
+
+## 📦 Source
+
+This fork does not publish a pre-built image. `action.yml` uses `image: Dockerfile`, so consumers build the image from source on the runner.
 
 
 ## ✨ Features
@@ -37,11 +42,9 @@
 ](https://hub.docker.com/r/devopsinfra/action-pull-request "shields.io")
 
 
-## 🏷️ Version Tags: vX, vX.Y, vX.Y.Z
-This action supports three tag levels for flexible versioning:
-- `vX`: latest patch of the major version (e.g., `v1`).
-- `vX.Y`: latest patch of the minor version (e.g., `v1.2`).
-- `vX.Y.Z`: fixed to a specific release (e.g., `v1.2.3`).
+## 🏷️ Pinning the action
+
+This fork is published only as source. Always pin consumers to a full 40-character commit SHA — branch names and tags are mutable and let upstream changes silently land in your CI. To upgrade, look up a newer commit on [the master history](https://github.com/ignitetech-group/action-pull-request/commits/master), update the SHA, and let CodeRabbit / your own review catch any behavior changes before merging.
 
 
 
@@ -49,7 +52,7 @@ This action supports three tag levels for flexible versioning:
 ## 📖 API Reference
 ```yaml
     - name: Run the Action
-      uses: devops-infra/action-pull-request@v1.0.2
+      uses: ignitetech-group/action-pull-request@16d9d8a4a76364d19ba585492a2bc5776e05be4a # replace with a current SHA from github.com/ignitetech-group/action-pull-request/commits/master
       with:
         github_token: ${{ secrets.GITHUB_TOKEN }}
         source_branch: development
@@ -133,10 +136,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@1af3b93b6815bc44a9784bd300feb67ff0d1eeb3 # actions/checkout@v6.0.0
 
       - name: Create pull request
-        uses: devops-infra/action-pull-request@v1.0.2
+        uses: ignitetech-group/action-pull-request@16d9d8a4a76364d19ba585492a2bc5776e05be4a # replace with a current SHA from github.com/ignitetech-group/action-pull-request/commits/master
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           title: Automatic pull request
@@ -155,13 +158,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@1af3b93b6815bc44a9784bd300feb67ff0d1eeb3 # actions/checkout@v6.0.0
         with:
           fetch-depth: 0
 
       - name: Run the Action
         if: startsWith(github.ref, 'refs/heads/feature')
-        uses: devops-infra/action-pull-request@v1.0.2
+        uses: ignitetech-group/action-pull-request@16d9d8a4a76364d19ba585492a2bc5776e05be4a # replace with a current SHA from github.com/ignitetech-group/action-pull-request/commits/master
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           title: ${{ github.event.commits[0].message }}
@@ -173,8 +176,9 @@ jobs:
           get_diff: true
 ```
 
-### 🎯 Use specific version
-Run the Action with a specific version tag.
+### 🎯 Pinning to a specific commit
+
+Pin to a full commit SHA. The trailing comment is a convention from `actions/checkout` and other widely-used actions: it lets readers see which version they're on at a glance, while the SHA stays the source of truth.
 
 ```yaml
 name: Run the Action
@@ -185,16 +189,11 @@ jobs:
   action-pull-request:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@1af3b93b6815bc44a9784bd300feb67ff0d1eeb3 # actions/checkout@v6.0.0
 
-      - uses: devops-infra/action-pull-request@v1.0.2
-        id: Pin patch version
-
-      - uses: devops-infra/action-pull-request@v1.0
-        id: Pin minor version
-
-      - uses: devops-infra/action-pull-request@v1
-        id: Pin major version
+      # Pick the SHA you want from
+      # https://github.com/ignitetech-group/action-pull-request/commits/master
+      - uses: ignitetech-group/action-pull-request@<commit-sha> # ignitetech-group/action-pull-request@<descriptor>
 ```
 
 
@@ -209,8 +208,8 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 💬 Support
 If you have any questions or need help, please:
-- 📝 Create an [issue](https://github.com/devops-infra/action-pull-request/issues)
-- 🌟 Star this repository if you find it useful!
+- 📝 For issues with this fork (the `gh`/REST-API entrypoint, the hardened workflows, the local-Dockerfile build model): file an [issue on the fork](https://github.com/ignitetech-group/action-pull-request/issues).
+- 📝 For issues with the upstream behaviour that this fork inherits unchanged: see [`devops-infra/action-pull-request` issues](https://github.com/devops-infra/action-pull-request/issues).
 
 ## Forking
 To publish images from a fork, set these variables so Task uses your registry identities:
@@ -238,5 +237,6 @@ Recommended setup:
 - Local development: use a `.env` file.
 - GitHub Actions: set repo variables for the four values above, and secrets for `DOCKER_TOKEN` and `GITHUB_TOKEN`.
 
-Publish images without a release:
-- Run the `(Manual) Release Create` workflow with `build_only: true` to build and push images without tagging a release.
+Publishing images:
+- This fork builds the action image from the local `Dockerfile` at runtime (`image: Dockerfile` in `action.yml`), so consumers do not need a pre-built image.
+- To publish manually, run `task docker:build:local` then push with your registry credentials. CI here only verifies that the build succeeds; it does not push.

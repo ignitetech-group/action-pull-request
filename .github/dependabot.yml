@@ -5,21 +5,9 @@ updates:
     directory: /
     schedule:
       interval: weekly
-    assignees:
-      - ChristophShyper
 
   # Enable version updates for Docker
   - package-ecosystem: docker
     directory: /
     schedule:
       interval: weekly
-    assignees:
-      - ChristophShyper
-
-#  # Enable version updates for pip
-#  - package-ecosystem: pip
-#    directory: /
-#    schedule:
-#      interval: daily
-#    assignees:
-#      - ChristophShyper
