@@ -205,8 +205,8 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 💬 Support
 If you have any questions or need help, please:
-- 📝 Create an [issue](https://github.com/devops-infra/action-pull-request/issues)
-- 🌟 Star this repository if you find it useful!
+- 📝 For issues with this fork (the `gh`/REST-API entrypoint, the hardened workflows, the local-Dockerfile build model): file an [issue on the fork](https://github.com/ignitetech-group/action-pull-request/issues).
+- 📝 For issues with the upstream behaviour that this fork inherits unchanged: see [`devops-infra/action-pull-request` issues](https://github.com/devops-infra/action-pull-request/issues).
 
 ## Forking
 To publish images from a fork, set these variables so Task uses your registry identities:
