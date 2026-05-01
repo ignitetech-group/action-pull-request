@@ -173,12 +173,15 @@ if [[ -z "${PR_NUMBER}" ]]; then
   fi
 
   if [[ -n "${PR_NUMBER}" ]]; then
+    # Trim leading/trailing whitespace only — preserves internal spaces in
+    # labels like "good first issue".
+    trim() { local v="$1"; v="${v#"${v%%[![:space:]]*}"}"; printf '%s' "${v%"${v##*[![:space:]]}"}"; }
     if [[ -n "${INPUT_LABEL}" ]]; then
       echo -e "\nAdding labels..."
       IFS=',' read -r -a LABELS <<< "${INPUT_LABEL}"
       for L in "${LABELS[@]}"; do
         gh api --method POST "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/labels" \
-          --field "labels[]=${L// /}" > /dev/null 2>&1 || true
+          --field "labels[]=$(trim "${L}")" > /dev/null 2>&1 || true
       done
     fi
     if [[ -n "${INPUT_REVIEWER}" ]]; then
@@ -186,7 +189,7 @@ if [[ -z "${PR_NUMBER}" ]]; then
       IFS=',' read -r -a REVIEWERS <<< "${INPUT_REVIEWER}"
       for R in "${REVIEWERS[@]}"; do
         gh api --method POST "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/requested_reviewers" \
-          --field "reviewers[]=${R// /}" > /dev/null 2>&1 || true
+          --field "reviewers[]=$(trim "${R}")" > /dev/null 2>&1 || true
       done
     fi
     if [[ -n "${INPUT_ASSIGNEE}" ]]; then
@@ -194,7 +197,7 @@ if [[ -z "${PR_NUMBER}" ]]; then
       IFS=',' read -r -a ASSIGNEES <<< "${INPUT_ASSIGNEE}"
       for A in "${ASSIGNEES[@]}"; do
         gh api --method POST "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/assignees" \
-          --field "assignees[]=${A// /}" > /dev/null 2>&1 || true
+          --field "assignees[]=$(trim "${A}")" > /dev/null 2>&1 || true
       done
     fi
     if [[ -n "${INPUT_MILESTONE}" ]]; then

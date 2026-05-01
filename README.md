@@ -1,10 +1,12 @@
 # 🚀 GitHub Action for creating Pull Requests
 **GitHub Action that will create a pull request from the currently selected branch.**
 
+> [!NOTE]
+> This is the IgniteTech fork of [`devops-infra/action-pull-request`](https://github.com/devops-infra/action-pull-request). It builds the action image from the local `Dockerfile` on every consumer run (no pre-built third-party image is pulled), uses the `gh` CLI plus the GitHub REST API instead of the deprecated `hub` binary, and pins all CI third-party actions to commit SHAs. To use this fork, replace `devops-infra/action-pull-request@<ref>` with `ignitetech-group/action-pull-request@<ref>` in the examples below.
 
-## 📦 Available on
-- **Docker Hub:** [devopsinfra/action-pull-request:latest](https://hub.docker.com/repository/docker/devopsinfra/action-pull-request)
-- **GitHub Packages:** [ghcr.io/devops-infra/action-pull-request:latest](https://github.com/devops-infra/action-pull-request/pkgs/container/action-pull-request)
+
+## 📦 Source
+This fork does not publish a pre-built image. `action.yml` uses `image: Dockerfile`, so consumers build the image from source on the runner.
 
 
 ## ✨ Features
@@ -49,7 +51,7 @@ This action supports three tag levels for flexible versioning:
 ## 📖 API Reference
 ```yaml
     - name: Run the Action
-      uses: devops-infra/action-pull-request@v1.0.2
+      uses: ignitetech-group/action-pull-request@master
       with:
         github_token: ${{ secrets.GITHUB_TOKEN }}
         source_branch: development
@@ -136,7 +138,7 @@ jobs:
         uses: actions/checkout@v5
 
       - name: Create pull request
-        uses: devops-infra/action-pull-request@v1.0.2
+        uses: ignitetech-group/action-pull-request@master
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           title: Automatic pull request
@@ -161,7 +163,7 @@ jobs:
 
       - name: Run the Action
         if: startsWith(github.ref, 'refs/heads/feature')
-        uses: devops-infra/action-pull-request@v1.0.2
+        uses: ignitetech-group/action-pull-request@master
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           title: ${{ github.event.commits[0].message }}
@@ -187,13 +189,13 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      - uses: devops-infra/action-pull-request@v1.0.2
+      - uses: ignitetech-group/action-pull-request@master
         id: Pin patch version
 
-      - uses: devops-infra/action-pull-request@v1.0
+      - uses: ignitetech-group/action-pull-request@master
         id: Pin minor version
 
-      - uses: devops-infra/action-pull-request@v1
+      - uses: ignitetech-group/action-pull-request@master
         id: Pin major version
 ```
 
