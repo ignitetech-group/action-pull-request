@@ -2,7 +2,9 @@
 **GitHub Action that will create a pull request from the currently selected branch.**
 
 > [!NOTE]
-> This is the IgniteTech fork of [`devops-infra/action-pull-request`](https://github.com/devops-infra/action-pull-request). It builds the action image from the local `Dockerfile` on every consumer run (no pre-built third-party image is pulled), uses the `gh` CLI plus the GitHub REST API instead of the deprecated `hub` binary, and pins all CI third-party actions to commit SHAs. To use this fork, replace `devops-infra/action-pull-request@<ref>` with `ignitetech-group/action-pull-request@<ref>` in the examples below.
+> This is the IgniteTech fork of [`devops-infra/action-pull-request`](https://github.com/devops-infra/action-pull-request). It builds the action image from the local `Dockerfile` on every consumer run (no pre-built third-party image is pulled), uses the `gh` CLI plus the GitHub REST API instead of the deprecated `hub` binary, and pins all CI third-party actions to commit SHAs.
+>
+> **Always pin to a full commit SHA**, never to a branch (`@master`) or a version tag (`@v1`, `@v1.0.2`). Branches move with every push and tags can be force-moved by maintainers, so both are mutable references that let upstream changes silently flow into your CI. A 40-character commit SHA is immutable and reproducible. Find the SHA you want at [github.com/ignitetech-group/action-pull-request/commits/master](https://github.com/ignitetech-group/action-pull-request/commits/master) and substitute it in the examples below.
 
 
 ## 📦 Source
@@ -39,11 +41,8 @@ This fork does not publish a pre-built image. `action.yml` uses `image: Dockerfi
 ](https://hub.docker.com/r/devopsinfra/action-pull-request "shields.io")
 
 
-## 🏷️ Version Tags: vX, vX.Y, vX.Y.Z
-This action supports three tag levels for flexible versioning:
-- `vX`: latest patch of the major version (e.g., `v1`).
-- `vX.Y`: latest patch of the minor version (e.g., `v1.2`).
-- `vX.Y.Z`: fixed to a specific release (e.g., `v1.2.3`).
+## 🏷️ Pinning the action
+This fork is published only as source. Always pin consumers to a full 40-character commit SHA — branch names and tags are mutable and let upstream changes silently land in your CI. To upgrade, look up a newer commit on [the master history](https://github.com/ignitetech-group/action-pull-request/commits/master), update the SHA, and let CodeRabbit / your own review catch any behavior changes before merging.
 
 
 
@@ -51,7 +50,7 @@ This action supports three tag levels for flexible versioning:
 ## 📖 API Reference
 ```yaml
     - name: Run the Action
-      uses: ignitetech-group/action-pull-request@master
+      uses: ignitetech-group/action-pull-request@16d9d8a4a76364d19ba585492a2bc5776e05be4a # replace with a current SHA from github.com/ignitetech-group/action-pull-request/commits/master
       with:
         github_token: ${{ secrets.GITHUB_TOKEN }}
         source_branch: development
@@ -138,7 +137,7 @@ jobs:
         uses: actions/checkout@v5
 
       - name: Create pull request
-        uses: ignitetech-group/action-pull-request@master
+        uses: ignitetech-group/action-pull-request@16d9d8a4a76364d19ba585492a2bc5776e05be4a # replace with a current SHA from github.com/ignitetech-group/action-pull-request/commits/master
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           title: Automatic pull request
@@ -163,7 +162,7 @@ jobs:
 
       - name: Run the Action
         if: startsWith(github.ref, 'refs/heads/feature')
-        uses: ignitetech-group/action-pull-request@master
+        uses: ignitetech-group/action-pull-request@16d9d8a4a76364d19ba585492a2bc5776e05be4a # replace with a current SHA from github.com/ignitetech-group/action-pull-request/commits/master
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           title: ${{ github.event.commits[0].message }}
@@ -175,8 +174,8 @@ jobs:
           get_diff: true
 ```
 
-### 🎯 Use specific version
-Run the Action with a specific version tag.
+### 🎯 Pinning to a specific commit
+Pin to a full commit SHA. The trailing comment is a convention from `actions/checkout` and other widely-used actions: it lets readers see which version they're on at a glance, while the SHA stays the source of truth.
 
 ```yaml
 name: Run the Action
@@ -187,16 +186,11 @@ jobs:
   action-pull-request:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@1af3b93b6815bc44a9784bd300feb67ff0d1eeb3 # actions/checkout@v6.0.0
 
-      - uses: ignitetech-group/action-pull-request@master
-        id: Pin patch version
-
-      - uses: ignitetech-group/action-pull-request@master
-        id: Pin minor version
-
-      - uses: ignitetech-group/action-pull-request@master
-        id: Pin major version
+      # Pick the SHA you want from
+      # https://github.com/ignitetech-group/action-pull-request/commits/master
+      - uses: ignitetech-group/action-pull-request@<commit-sha> # ignitetech-group/action-pull-request@<descriptor>
 ```
 
 
