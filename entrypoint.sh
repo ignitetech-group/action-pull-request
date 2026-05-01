@@ -154,7 +154,7 @@ if [[ -z "${PR_NUMBER}" ]]; then
     --field "base=${TARGET_BRANCH}" \
     --field "title=${TITLE}" \
     --field "body=@/tmp/template" \
-    --field "draft=${DRAFT_VALUE}" 2>&1) || true
+    -F "draft=${DRAFT_VALUE}" 2>&1) || true
 
   URL=$(echo "${RESPONSE}" | jq -r '.html_url // empty')
   PR_NUMBER=$(echo "${RESPONSE}" | jq -r '.number // empty')
@@ -200,7 +200,7 @@ if [[ -z "${PR_NUMBER}" ]]; then
     if [[ -n "${INPUT_MILESTONE}" ]]; then
       echo -e "Setting milestone..."
       gh api --method PATCH "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}" \
-        --field "milestone=${INPUT_MILESTONE}" > /dev/null 2>&1 || true
+        -F "milestone=${INPUT_MILESTONE}" > /dev/null 2>&1 || true
     fi
   fi
 else
