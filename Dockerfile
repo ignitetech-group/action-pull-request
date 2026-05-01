@@ -31,4 +31,10 @@ RUN chmod +x /entrypoint.sh ;\
 
 # Finish up
 WORKDIR /github/workspace
+# GitHub Actions docker container actions must run as root: the runner mounts
+# /github/workspace with root-owned files and the entrypoint needs to read /
+# write that volume and run git operations on it. Adding a non-root USER would
+# break the action — this is the same pattern every published Actions docker
+# image follows.
+# nosemgrep: dockerfile.security.missing-user-entrypoint.missing-user-entrypoint
 ENTRYPOINT ["/entrypoint.sh"]
