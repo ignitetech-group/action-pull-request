@@ -176,34 +176,63 @@ if [[ -z "${PR_NUMBER}" ]]; then
     # Trim leading/trailing whitespace only — preserves internal spaces in
     # labels like "good first issue".
     trim() { local v="$1"; v="${v#"${v%%[![:space:]]*}"}"; printf '%s' "${v%"${v##*[![:space:]]}"}"; }
+    # Best-effort gh api wrapper: warns on failure but does not abort the run.
+    gh_api_best_effort() {
+      local what="$1"; shift
+      local out
+      if ! out=$(gh api "$@" 2>&1); then
+        echo "[WARN] ${what} failed: ${out}" >&2
+      fi
+    }
     if [[ -n "${INPUT_LABEL}" ]]; then
       echo -e "\nAdding labels..."
       IFS=',' read -r -a LABELS <<< "${INPUT_LABEL}"
       for L in "${LABELS[@]}"; do
-        gh api --method POST "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/labels" \
-          --field "labels[]=$(trim "${L}")" > /dev/null 2>&1 || true
+        L_TRIMMED=$(trim "${L}")
+        gh_api_best_effort "add label '${L_TRIMMED}'" \
+          --method POST "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/labels" \
+          --field "labels[]=${L_TRIMMED}"
       done
     fi
     if [[ -n "${INPUT_REVIEWER}" ]]; then
       echo -e "Adding reviewers..."
       IFS=',' read -r -a REVIEWERS <<< "${INPUT_REVIEWER}"
       for R in "${REVIEWERS[@]}"; do
-        gh api --method POST "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/requested_reviewers" \
-          --field "reviewers[]=$(trim "${R}")" > /dev/null 2>&1 || true
+        R_TRIMMED=$(trim "${R}")
+        gh_api_best_effort "add reviewer '${R_TRIMMED}'" \
+          --method POST "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/requested_reviewers" \
+          --field "reviewers[]=${R_TRIMMED}"
       done
     fi
     if [[ -n "${INPUT_ASSIGNEE}" ]]; then
       echo -e "Adding assignees..."
       IFS=',' read -r -a ASSIGNEES <<< "${INPUT_ASSIGNEE}"
       for A in "${ASSIGNEES[@]}"; do
-        gh api --method POST "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/assignees" \
-          --field "assignees[]=$(trim "${A}")" > /dev/null 2>&1 || true
+        A_TRIMMED=$(trim "${A}")
+        gh_api_best_effort "add assignee '${A_TRIMMED}'" \
+          --method POST "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/assignees" \
+          --field "assignees[]=${A_TRIMMED}"
       done
     fi
     if [[ -n "${INPUT_MILESTONE}" ]]; then
       echo -e "Setting milestone..."
-      gh api --method PATCH "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}" \
-        -F "milestone=${INPUT_MILESTONE}" > /dev/null 2>&1 || true
+      # GitHub's PATCH /issues endpoint requires a numeric milestone ID.
+      # Preserve the legacy hub-style behaviour of accepting a milestone
+      # title by resolving non-numeric input to the matching milestone's ID.
+      MILESTONE_ID="${INPUT_MILESTONE}"
+      if ! [[ "${INPUT_MILESTONE}" =~ ^[0-9]+$ ]]; then
+        MILESTONE_ID=$(gh api --paginate "repos/${GITHUB_REPOSITORY}/milestones?state=all" \
+          --jq ".[] | select(.title==\"${INPUT_MILESTONE}\") | .number" 2>/dev/null | head -1)
+        if [[ -z "${MILESTONE_ID}" ]]; then
+          echo "[WARN] No milestone found with title '${INPUT_MILESTONE}'; skipping milestone assignment." >&2
+          MILESTONE_ID=""
+        fi
+      fi
+      if [[ -n "${MILESTONE_ID}" ]]; then
+        gh_api_best_effort "set milestone ${MILESTONE_ID}" \
+          --method PATCH "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}" \
+          -F "milestone=${MILESTONE_ID}"
+      fi
     fi
   fi
 else
