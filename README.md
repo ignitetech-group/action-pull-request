@@ -8,6 +8,7 @@
 
 
 ## 📦 Source
+
 This fork does not publish a pre-built image. `action.yml` uses `image: Dockerfile`, so consumers build the image from source on the runner.
 
 
@@ -42,6 +43,7 @@ This fork does not publish a pre-built image. `action.yml` uses `image: Dockerfi
 
 
 ## 🏷️ Pinning the action
+
 This fork is published only as source. Always pin consumers to a full 40-character commit SHA — branch names and tags are mutable and let upstream changes silently land in your CI. To upgrade, look up a newer commit on [the master history](https://github.com/ignitetech-group/action-pull-request/commits/master), update the SHA, and let CodeRabbit / your own review catch any behavior changes before merging.
 
 
@@ -134,7 +136,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@1af3b93b6815bc44a9784bd300feb67ff0d1eeb3 # actions/checkout@v6.0.0
 
       - name: Create pull request
         uses: ignitetech-group/action-pull-request@16d9d8a4a76364d19ba585492a2bc5776e05be4a # replace with a current SHA from github.com/ignitetech-group/action-pull-request/commits/master
@@ -156,7 +158,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@1af3b93b6815bc44a9784bd300feb67ff0d1eeb3 # actions/checkout@v6.0.0
         with:
           fetch-depth: 0
 
@@ -175,6 +177,7 @@ jobs:
 ```
 
 ### 🎯 Pinning to a specific commit
+
 Pin to a full commit SHA. The trailing comment is a convention from `actions/checkout` and other widely-used actions: it lets readers see which version they're on at a glance, while the SHA stays the source of truth.
 
 ```yaml
