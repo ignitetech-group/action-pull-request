@@ -238,5 +238,6 @@ Recommended setup:
 - Local development: use a `.env` file.
 - GitHub Actions: set repo variables for the four values above, and secrets for `DOCKER_TOKEN` and `GITHUB_TOKEN`.
 
-Publish images without a release:
-- Run the `(Manual) Release Create` workflow with `build_only: true` to build and push images without tagging a release.
+Publishing images:
+- This fork builds the action image from the local `Dockerfile` at runtime (`image: Dockerfile` in `action.yml`), so consumers do not need a pre-built image.
+- To publish manually, run `task docker:build:local` then push with your registry credentials. CI here only verifies that the build succeeds; it does not push.
